@@ -213,7 +213,7 @@
     <ClInclude Include="..\..\cgame\cg_public.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\client\curlh\cl_curl.h">
+    <ClInclude Include="..\..\client\app_curl\cl_curl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\client\client.h">

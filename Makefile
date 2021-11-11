@@ -40,13 +40,31 @@ BUILD_DEBUG=$(BUILD_PATH)/debug-$(PLATFORM)-$(CPU)
 BUILD_RELEASE=$(BUILD_PATH)/release-$(PLATFORM)-$(CPU)
 
 ASM_PATH=$(CODE_PATH)/asm
+ASM_X86_PATH=$(ASM_PATH)/x86
+
 CLIENT_PATH=$(CODE_PATH)/client
+APP_CURL_PATH = $(CLIENT_PATH)/app_curl
+
 SERVER_PATH=$(CODE_PATH)/server
-SDL_PATH=$(CODE_PATH)/sdl
 
 COMMON_PATH=$(CODE_PATH)/qcommon
+RENDERER_PATH=$(COMMON_PATH)/renderer
+VM_X86_PATH=$(COMMON_PATH)/vm/x86
+VM_X86_64_PATH=$(VM_X86_PATH)
+#VM_X86_64_PATH=$(COMMON_PATH)/vm/x86_64
+VM_ARM_PATH=$(COMMON_PATH)/vm/arm
+VM_AARCH64_PATH=$(COMMON_PATH)/vm/aarch64
+
 UNIX_PATH=$(CODE_PATH)/unix
+UNIX_SDL_OFF_PATH = $(UNIX_PATH)/sdl/off
+UNIX_VK_ON_PATH = $(UNIX_PATH)/vk/on
+
 WIN32_PATH=$(CODE_PATH)/win32
+WIN32_SDL_ON_PATH=$(WIN32_PATH)/sdl/on
+WIN32_SDL_OFF_PATH=$(WIN32_PATH)/sdl/off
+WIN32_VK_ON_PATH=$(WIN32_PATH)/vk/on
+    
+SDL_PATH=$(CODE_PATH)/sdl
 BOTLIB_PATH=$(CODE_PATH)/botlib
 UI_PATH=$(CODE_PATH)/ui
 JPG_PATH=$(CODE_PATH)/libjpeg
@@ -55,6 +73,8 @@ RENDERER_COMMON_PATH=$(CODE_PATH)/renderercommon
 RENDERER1_PATH=$(CODE_PATH)/renderer
 RENDERER2_PATH=$(CODE_PATH)/renderer2
 RENDERERV_PATH=$(CODE_PATH)/renderervk
+
+RENDERER2_STRING_PATH = $(RENDERER2_PATH)/string
 
 #----------------------------------------------------------
 
@@ -75,7 +95,7 @@ VERSION=$(shell grep "\#define APP_VERSION" $(COMMON_PATH)/q_shared.h | \
 #==========================================================
 
 CLIENT_ON               = 1
-SERVER_ON               = 0
+SERVER_ON               = 1
 
 OPENGL1_ON              = 1
 OPENGL2_ON              = 1
@@ -375,7 +395,7 @@ ifdef MINGW
 
 #----------------------------------------------------------
 
-  # Use generic Windres if unfound:
+  # Set generic Windres if missing:
   ifeq ($(WINDRES),)
     WINDRES=windres
   endif
@@ -603,7 +623,7 @@ ifneq ($(CLIENT_ON),0)
 endif
 
 ifeq ($(CCACHE_ON),1)
-  CC := ccache $(CC)
+  CC = ccache $(CC)
 endif
 
 ifneq ($(RENDERER_DLLS_ON_Make),0)
@@ -678,7 +698,7 @@ $(CLIENT_BPATH)/%.o: $(ASM_PATH)/%.s
 $(CLIENT_BPATH)/%.o: $(CLIENT_PATH)/%.c
 	$(DO_CC)
 
-$(CLIENT_BPATH)/%.o: $(CURLH_PATH)/%.c $(CLIENT_PATH)/%.h) $(CURLH_PATH)/%.h
+$(CLIENT_BPATH)/%.o: $(APP_CURL_PATH)/%.c $(CLIENT_PATH)/%.h) $(APP_CURL_PATH)/%.h
 	$(DO_CC)
 
 $(CLIENT_BPATH)/%.o: $(SERVER_PATH)/%.c
@@ -687,13 +707,12 @@ $(CLIENT_BPATH)/%.o: $(SERVER_PATH)/%.c
 $(CLIENT_BPATH)/%.o: $(COMMON_PATH)/%.c
 	$(DO_CC)
 
-#DEPS := $(OBJ:.o=.d)
+#DEPS = $(OBJ:.o=.d)
 #-include $(DEPS)  
 
 # broken:
-$(BOTLIB_BPATH)/%.o: $(BOTLIB_PATH)/%.c $(BOTLIB_PATH)/%.h $(COMMON_PATH)/%.h
-  %.o: %.c 
-  #$(BOTLIB_BPATH)/%.o: $(BOTLIB_PATH)/%.c Makefile
+$(BOTLIB_BPATH)/%.o: $(BOTLIB_PATH)/%.c $(BOTLIB_PATH)/%.h $(COMMON_PATH)/%.h 
+  %.o: %.c
   #%.o: %.c ${BOTLIB_HEADER}
 	$(DO_BOT_CC)
 
@@ -701,6 +720,18 @@ $(B)/libjpeg/%.o: $(JPG_PATH)/%.c
 	$(DO_CC)
 
 $(CLIENT_BPATH)/%.o: $(SDL_PATH)/%.c
+	$(DO_CC)
+
+$(CLIENT_BPATH)/%.o: $(VM_X86_PATH)/%.c
+	$(DO_CC)
+
+$(SERVER_BPATH)/%.o: $(VM_X86_PATH)/%.c
+	$(DO_CC)
+
+$(CLIENT_BPATH)/%.o: $(RENDERER_PATH)/%.c
+	$(DO_CC)
+
+$(SERVER_BPATH)/%.o: $(RENDERER_PATH)/%.c
 	$(DO_CC)
 
 $(REND1_BPATH)/%.o: $(RENDERER1_PATH)/%.c
@@ -788,7 +819,7 @@ $2: $1
 	@cp $1 $2
 endef
 
-#Create rules for copying files into the base build path (useful for bundling):
+# Create rules for copying files into the base build path (for bundling):
 define GENERATE_COPY_TARGETS
 $(foreach FILE,$1, \
   $(eval $(call ADD_COPY_TARGET, \
@@ -804,7 +835,7 @@ endif
 
 #----------------------------------------------------------
 
-#Create Build folders & tools, then build:
+# Create Build folders & tools, then build:
 targets: doFolders tools
 	@echo ""
 	@echo "Building $(CLIENT_NAME) in $(B):"
@@ -837,7 +868,7 @@ endif
 
 #----------------------------------------------------------
 
-#Create folders from paths:
+# Create folders from paths:
 doFolders:
 	@if [ ! -d $(BUILD_PATH) ];then $(MKDIR) $(BUILD_PATH);fi
 	@if [ ! -d $(B) ];then $(MKDIR) $(B);fi
@@ -848,20 +879,48 @@ doFolders:
 	@if [ ! -d $(REND2_BPATH)/glsl ];then $(MKDIR) $(REND2_BPATH)/glsl;fi
 	@if [ ! -d $(RENDV_BPATH) ];then $(MKDIR) $(RENDV_BPATH);fi
 	@if [ ! -d $(BOTLIB_BPATH) ];then $(MKDIR) $(BOTLIB_BPATH);fi
-	@if [ ! -d $(B)/libjpeg ];then $(MKDIR) $(B)/libjpeg;fi
+	
+  #@if [ ! -d $(B)/libjpeg ];then $(MKDIR) $(B)/libjpeg;fi
 
 #############################################################################
 # CLIENT/SERVER:
 #############################################################################
-CODE_HEADERS = 
+
+CLIENT_CODE = $(wildcard $(CLIENT_PATH)/*.c)
+CLIENT_OBJS = $(CLIENT_CODE:%.c=%.o)
+#CLIENT_OBJS = $($(CLIENT_BPATH)/, $(patsubst %.c, %.o, $(CLIENT_CODE)))
+
+OBJ = $(CLIENT_OBJS)
+
+COMMON_OBJS += $(wildcard $(COMMON_PATH)/*.c)
+OBJ += $(COMMON_OBJS)
+
+COMMON_RENDERER_OBJS = $(wildcard $(RENDERER_PATH)/*.c)
+OBJ += $(COMMON_RENDERER_OBJS)
+
+# Server:
+SERVER_OBJS = $(wildcard $(SERVER_PATH)/*.c)
+OBJ += $(SERVER_OBJS)
+
+# Botlib:
+#BOTLIB_HEADER = $(wildcard $(BOTLIB_PATH)/*.h) $(wildcard $(COMMON_PATH)/*.h) 
+BOTLIB_CODE = $(wildcard $(BOTLIB_PATH)/*.c)
+BOTLIB_OBJS = $(BOTLIB_CODE:%.c=%.o)
+#BOTLIB_OBJS = $($(BOTLIB_BPATH)/, $(patsubst %.c, %.o, $(BOTLIB_CODE)))
+#BOTLIB_OBJS = $(patsubst %.c, %.o, $(BOTLIB_CODE))
+#OBJ += $(BOTLIB_CODE)
+
+OBJ += $(BOTLIB_OBJS)
+
+JPG_OBJS = $(wildcard $(JPG_PATH)/*.c)
 
 RENDERER1_OBJS = $(wildcard $(RENDERER1_PATH)/*.c)
 
+#----------------------------------------------------------
+
 ifneq ($(RENDERER_DLLS_ON_Make), 0)
-  RENDERER1_OBJS += \
-    $(REND1_BPATH)/q_shared.o \
-    $(REND1_BPATH)/puff.o \
-    $(REND1_BPATH)/q_math.o
+  REND1_CODE = $(wildcard $(RENDERER_PATH)/*.c)
+  RENDERER1_OBJS += $(REND1_CODE)
 endif
 
 #----------------------------------------------------------
@@ -869,10 +928,8 @@ endif
 RENDERER2_OBJS = $(wildcard $(RENDERER2_PATH)/*.c)
 
 ifneq ($(RENDERER_DLLS_ON_Make), 0)
-  RENDERER2_OBJS += \
-    $(REND2_BPATH)/q_shared.o \
-    $(REND2_BPATH)/puff.o \
-    $(REND2_BPATH)/q_math.o
+  REND2_CODE = $(wildcard $(RENDERER_PATH)/*.c)
+  RENDERER2_OBJS += $(REND2_CODE)
 endif
 
 RENDERER2_FX_OBJS = $(REND2_BPATH)/glsl/*.o
@@ -884,66 +941,9 @@ RENDERER2_FX_OBJS = $(REND2_BPATH)/glsl/*.o
 RENDERER_VULKAN_OBJS = $(wildcard $(RENDERERV_PATH)/*.c)
 
 ifneq ($(RENDERER_DLLS_ON_Make), 0)
-  RENDERER_VULKAN_OBJS += \
-    $(RENDV_BPATH)/q_shared.o \
-    $(RENDV_BPATH)/puff.o \
-    $(RENDV_BPATH)/q_math.o
+  RENDV_CODE = $(wildcard $(RENDERER_PATH)/*.c)
+  RENDERER_VULKAN_OBJS += $(RENDV_CODE)
 endif
-
-#----------------------------------------------------------
-
-JPG_OBJS = $(wildcard $(JPG_PATH)/*.c)
-
-#----------------------------------------------------------
-
-OBJ=
-CLIENT_CODE = $(wildcard $(CLIENT_PATH)/*.c)
-CLIENT_OBJS = $(CLIENT_CODE:%.c=%.o)
-
-OBJ += $(CLIENT_OBJS)
-
-
-#COMMON_OBJS += $(wildcard $(COMMON_PATH)/*.c)
-#OBJ += $(COMMON_OBJS)
-
-OBJ += \
-  $(CLIENT_BPATH)/cmd.o \
-  $(CLIENT_BPATH)/cm_load.o \
-  $(CLIENT_BPATH)/cm_patch.o \
-  $(CLIENT_BPATH)/cm_polylib.o \
-  $(CLIENT_BPATH)/cm_test.o \
-  $(CLIENT_BPATH)/cm_trace.o \
-  $(CLIENT_BPATH)/common.o \
-  $(CLIENT_BPATH)/cvar.o \
-  $(CLIENT_BPATH)/files.o \
-  $(CLIENT_BPATH)/history.o \
-  $(CLIENT_BPATH)/keys.o \
-  $(CLIENT_BPATH)/md4.o \
-  $(CLIENT_BPATH)/md5.o \
-  $(CLIENT_BPATH)/msg.o \
-  $(CLIENT_BPATH)/net_chan.o \
-  $(CLIENT_BPATH)/net_ip.o \
-  $(CLIENT_BPATH)/huffman.o \
-  $(CLIENT_BPATH)/huffman_static.o \
-  $(CLIENT_BPATH)/q_math.o \
-  $(CLIENT_BPATH)/q_shared.o \
-  $(CLIENT_BPATH)/unzip.o \
-  $(CLIENT_BPATH)/puff.o \
-  $(CLIENT_BPATH)/vm.o \
-  $(CLIENT_BPATH)/vm_interpreted.o 
-
-#server:
-SERVER_OBJS = $(wildcard $(SERVER_PATH)/*.c)
-OBJ += $(SERVER_OBJS)
-
-#botlib:
-#BOTLIB_HEADER = $(wildcard $(BOTLIB_PATH)/*.h) $(wildcard $(COMMON_PATH)/*.h) 
-BOTLIB_CODE = $(wildcard $(BOTLIB_PATH)/*.c)
-BOTLIB_OBJS = $(BOTLIB_CODE:%.c=%.o)
-#BOTLIB_OBJS = $(patsubst %.c, %.o, $(BOTLIB_CODE))
-#CODE_HEADERS += $(CLIENT_PATH)/*.c $(BOTLIB_PATH)/*c $(COMMON_PATH)/*c
-
-OBJ += $(BOTLIB_OBJS)
 
 #----------------------------------------------------------
 
@@ -968,9 +968,11 @@ endif
 
 ifeq ($(CPU),x86)
 ifndef MINGW
-  OBJ += \
-    $(CLIENT_BPATH)/snd_mix_mmx.o \
-    $(CLIENT_BPATH)/snd_mix_sse.o
+  ASM_X86_CODE = $(wildcard  $(ASM_X86_BPATH)/*.s)
+  OBJ += $(ASM_X86_CODE)
+  #OBJ += \
+    $(CLIENT_BPATH)/x86/snd_mix_mmx.o \
+    $(CLIENT_BPATH)/x86/snd_mix_sse.o
 endif
 endif
 
@@ -978,108 +980,79 @@ endif
 
 ifeq ($(VM_ON),true)
   VM_CODE =
-
   ifeq ($(CPU),x86)
-  $(wildcard $(VM_CODE)/*.c)
-    VM_CODE = $(wildcard $(CLIENT_PATH)/vm/x86/*.c)
-    OBJ += $(CLIENT_BPATH)/vm_x86.o
+    VM_X86_CODE = $(wildcard $(VM_X86_PATH)/*.c)
+    OBJ += $(VM_X86_CODE)
   endif
   ifeq ($(CPU),x86_64)
-    VM_CODE = $(wildcard $(CLIENT_PATH)/vm/x86_64/*.c)
-    OBJ += $(CLIENT_BPATH)/vm_x86.o
+    VM_X86_64_CODE = $(wildcard $(VM_X86_64_PATH)/*.c)
+    OBJ += $(VM_X86_64_CODE)
   endif
   ifeq ($(CPU),arm)
-    VM_CODE = $(wildcard $(CLIENT_PATH)/vm/arm/*.c)
-    #OBJ += $(CLIENT_BPATH)/vm_armv7l.o
+    VM_ARM_CODE = $(wildcard $(VM_ARM_PATH)/*.c)
+    OBJ += VM_ARM_CODE
   endif
   ifeq ($(CPU),aarch64)
-    VM_CODE = $(wildcard $(CLIENT_PATH)/vm/aarch64/*.c)
-    #OBJ += $(CLIENT_BPATH)/vm_aarch64.o
+    VM_AARCH64_CODE = $(wildcard $(VM_AARCH64_PATH)/*.c)
+    OBJ += VM_AARCH64_CODE
   endif
 
-  #VM_OBJS = $(VM_CODE:%.c=%.o)
-  #OBJ += $(VM_OBJS)
 endif
 
 #----------------------------------------------------------
-
-
-#OBJ += $(CLIENT_BPATH)/curlh/cl_curl.o
 
 ifeq ($(CURL_ON_Make),1)
-  CURLH_PATH = $(CLIENT_PATH)/curlh
-  #CURLH_HEADER = $(wildcard $(CLIENT_PATH)/client.h) $(wildcard $(CURLH_PATH)/*.h) 
-  CURLH_CODE = $(wildcard $(CURLH_PATH)/*.c)
-  CURLH_OBJS = $(CURLH_CODE:%.c=%.o)
-  OBJ += $(CURLH_OBJS)
+  APP_CURL_CODE = $(wildcard $(APP_CURL_PATH)/*.c)
+  APP_CURL_OBJS = $(APP_CURL_CODE:%.c=%.o)
+  OBJ += $(APP_CURL_OBJS)
 endif
 
+#==========================================================
 ifdef MINGW
-
-#----------------------------------------------------------
-
-  OBJ += \
-    $(CLIENT_BPATH)/win_main.o \
-    $(CLIENT_BPATH)/win_shared.o \
-    $(CLIENT_BPATH)/win_syscon.o \
-    $(CLIENT_BPATH)/win_resource.o
+#==========================================================
+  WIN32_MAIN_CODE = $(wildcard $(WIN32_PATH)/*.c)
+  OBJ += $(WIN32_MAIN_CODE)
+  
+  WIN32_SDL_ON_CODE = $(wildcard $(WIN32_SDL_ON_PATH)/*.c)
+  OBJ += $(WIN32_SDL_ON_CODE)
 
 ifeq ($(SDL_ON_Make),1)
-    OBJ += \
-        $(CLIENT_BPATH)/sdl_glimp.o \
-        $(CLIENT_BPATH)/sdl_gamma.o \
-        $(CLIENT_BPATH)/sdl_input.o \
-        $(CLIENT_BPATH)/sdl_snd.o
+
 else # !SDL_ON_Make
-    OBJ += \
-        $(CLIENT_BPATH)/win_gamma.o \
-        $(CLIENT_BPATH)/win_glimp.o \
-        $(CLIENT_BPATH)/win_input.o \
-        $(CLIENT_BPATH)/win_minimize.o \
-        $(CLIENT_BPATH)/win_qgl.o \
-        $(CLIENT_BPATH)/win_snd.o \
-        $(CLIENT_BPATH)/win_wndproc.o
+    WIN32_SDL_OFF_CODE = $(wildcard $(WIN32_SDL_OFF_PATH)/*.c)
+    OBJ += $(WIN32_SDL_OFF_CODE)
 ifeq ($(VULKAN_API_ON_Make),1)
-    OBJ += \
-        $(CLIENT_BPATH)/win_qvk.o
+    WIN32_VK_ON_CODE = $(wildcard $(WIN32_VK_ON_PATH)/*.c)
+    OBJ += $(WIN32_VK_ON_CODE)
 endif
 endif # !SDL_ON_Make
 
-#----------------------------------------------------------
-
+#==========================================================
 else # !MINGW:
-
-  OBJ += \
-    $(CLIENT_BPATH)/unix_main.o \
-    $(CLIENT_BPATH)/unix_shared.o \
-    $(CLIENT_BPATH)/linux_signals.o
+#==========================================================
+  
+  UNIX_MAIN_CODE = $(wildcard $(UNIX_PATH)/*.c)
+  OBJ += $(UNIX_MAIN_CODE)
 
 ifeq ($(SDL_ON_Make),1)
-    OBJ += \
-        $(CLIENT_BPATH)/sdl_glimp.o \
-        $(CLIENT_BPATH)/sdl_gamma.o \
-        $(CLIENT_BPATH)/sdl_input.o \
-        $(CLIENT_BPATH)/sdl_snd.o
+    SDL_ON_CODE = $(wildcard $(SDL_PATH)/*.c)
+    SDL_ON_OBJS = $(SDL_ON_CODE:%.c=%.o)
+    OBJ += $(SDL_ON_OBJS)
 else # !SDL_ON_Make:
-    OBJ += \
-        $(CLIENT_BPATH)/linux_glimp.o \
-        $(CLIENT_BPATH)/linux_qgl.o \
-        $(CLIENT_BPATH)/linux_snd.o \
-        $(CLIENT_BPATH)/x11_dga.o \
-        $(CLIENT_BPATH)/x11_randr.o \
-        $(CLIENT_BPATH)/x11_vidmode.o
+    UNIX_SDL_OFF_CODE = $(wildcard $(UNIX_SDL_OFF_PATH)/*.c)
+    OBJ += $(UNIX_SDL_OFF_CODE)
 ifeq ($(VULKAN_API_ON_Make),1)
-    OBJ += \
-        $(CLIENT_BPATH)/linux_qvk.o
+    UNIX_VULKAN_ON_CODE = $(wildcard $(UNIX_VK_ON_PATH)/*.c)
+    OBJ += $(UNIX_VULKAN_ON_CODE)
 endif
 
 endif # !SDL_ON_Make
 
 endif # !MINGW
 
-#----------------------------------------------------------
-
+#==========================================================
 # Client binary:
+#==========================================================
 
 $(B)/$(TARGET_CLIENT): $(OBJ)
 	$(echo_cmd) "LD $@"
@@ -1094,9 +1067,9 @@ $(B)/$(TARGET_RENDERER1): $(RENDERER1_OBJS)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) -o $@ $(RENDERER1_OBJS) $(SHARED_LIB_CFLAGS) $(SHARED_LIB_LDFLAGS)
 
-$(STRINGIFY): $(CODE_PATH)/renderer2/stringify.c
+$(STRINGIFY): $(wildcard $(RENDERER2_STRING_PATH)/*.c)
 	$(echo_cmd) "LD $@"
-	$(Q)$(CC) -o $@ $(CODE_PATH)/renderer2/stringify.c $(LDFLAGS)
+	$(Q)$(CC) -o $@ $(wildcard $(RENDERER2_STRING_PATH)/*.c) $(LDFLAGS)
 
 $(B)/$(TARGET_RENDERER2): $(RENDERER2_OBJS) $(RENDERER2_FX_OBJS)
 	$(echo_cmd) "LD $@"
@@ -1110,6 +1083,9 @@ $(B)/$(TARGET_RENDERER_VULKAN): $(RENDERER_VULKAN_OBJS)
 # DEDICATED SERVER:
 #############################################################################
 
+# Server:
+#DOBJ = $(SERVER_OBJS)
+
 DOBJ = \
   $(SERVER_BPATH)/sv_bot.o \
   $(SERVER_BPATH)/sv_client.o \
@@ -1120,8 +1096,12 @@ DOBJ = \
   $(SERVER_BPATH)/sv_main.o \
   $(SERVER_BPATH)/sv_net_chan.o \
   $(SERVER_BPATH)/sv_snapshot.o \
-  $(SERVER_BPATH)/sv_world.o \
-  \
+  $(SERVER_BPATH)/sv_world.o 
+
+# Common:
+#DOBJ += $(COMMON_OBJS)
+
+DOBJ += \
   $(SERVER_BPATH)/cm_load.o \
   $(SERVER_BPATH)/cm_patch.o \
   $(SERVER_BPATH)/cm_polylib.o \
@@ -1139,15 +1119,26 @@ DOBJ = \
   $(SERVER_BPATH)/net_chan.o \
   $(SERVER_BPATH)/net_ip.o \
   $(SERVER_BPATH)/huffman.o \
-  $(SERVER_BPATH)/huffman_static.o \
-  \
-  $(SERVER_BPATH)/q_math.o \
-  $(SERVER_BPATH)/q_shared.o \
-  \
+  $(SERVER_BPATH)/huffman_static.o 
+
+# VM:
+#DOBJ += \
   $(SERVER_BPATH)/unzip.o \
   $(SERVER_BPATH)/vm.o \
-  $(SERVER_BPATH)/vm_interpreted.o \
-  \
+  $(SERVER_BPATH)/vm_interpreted.o
+
+# Common/renderer:
+#DOBJ += $(COMMON_RENDERER_OBJS)
+
+DOBJ += \
+  $(SERVER_BPATH)/q_math.o \
+  $(SERVER_BPATH)/q_shared.o
+
+
+# Botlib:
+#DOBJ += $(BOTLIB_OBJS)
+
+DOBJ += \
   $(SERVER_BPATH)/be_aas_bspq3.o \
   $(SERVER_BPATH)/be_aas_cluster.o \
   $(SERVER_BPATH)/be_aas_debug.o \
@@ -1177,13 +1168,16 @@ DOBJ = \
   $(SERVER_BPATH)/l_script.o \
   $(SERVER_BPATH)/l_struct.o
 
+
 ifdef MINGW
+  #DOBJ += $(WIN32_MAIN_CODE)
   DOBJ += \
   $(SERVER_BPATH)/win_main.o \
   $(CLIENT_BPATH)/win_resource.o \
   $(SERVER_BPATH)/win_shared.o \
   $(SERVER_BPATH)/win_syscon.o
 else
+  #DOBJ += $(UNIX_MAIN_CODE)
   DOBJ += \
   $(SERVER_BPATH)/linux_signals.o \
   $(SERVER_BPATH)/unix_main.o \
@@ -1192,16 +1186,20 @@ endif
 
 ifeq ($(VM_ON),true)
   ifeq ($(CPU),x86)
-    DOBJ += $(SERVER_BPATH)/vm_x86.o
+    #DOBJ += $(SERVER_BPATH)/vm_x86.o
+    DOBJ += $(VM_X86_CODE)
   endif
   ifeq ($(CPU),x86_64)
     DOBJ += $(SERVER_BPATH)/vm_x86.o
+    #DOBJ += $(VM_X86_CODE)
   endif
   ifeq ($(CPU),arm)
-    DOBJ += $(SERVER_BPATH)/vm_armv7l.o
+    #DOBJ += $(SERVER_BPATH)/vm_armv7l.o
+    DOBJ += $(VM_ARM_CODE)
   endif
   ifeq ($(CPU),aarch64)
-    DOBJ += $(SERVER_BPATH)/vm_aarch64.o
+    #DOBJ += $(SERVER_BPATH)/vm_aarch64.o
+    DOBJ += $(VM_AARCH64_CODE)
   endif
 endif
 
@@ -1209,7 +1207,6 @@ $(B)/$(TARGET_SERVER): $(DOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) -o $@ $(DOBJ) $(LDFLAGS)
 
-INCLUDE = $(CODE_HEADERS:.c=.d)
 #############################################################################
 # TOOLS:
 #############################################################################
@@ -1268,7 +1265,7 @@ wipe-build: clean
 #############################################################################
 
 KEEP=$(shell find . -name '*.d')
-include $(KEEP)
+#include $(KEEP)
 
 ifneq ($(strip $(KEEP)),)
  include $(KEEP)
